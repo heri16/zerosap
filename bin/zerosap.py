@@ -21,7 +21,7 @@ rfc_conn_params = {
     'sysnr': os.getenv('ZEROSAP_RFC_SYSNR', '00'),
     'client': os.getenv('ZEROSAP_RFC_CLIENT', '000')
 }
-zmq_client_endpoint = os.getenv('ZEROSAP_CLIENT', "tcp://10.1.1.100:4242")
+zmq_hub_endpoint = os.getenv('ZEROSAP_ZMQ_HUB', "tcp://localhost:4801")
 zmq_public_key = os.getenv('ZEROSAP_ZMQ_PUB_KEY', "7f188e5244b02bf497b86de417515cf4d4053ce4eb977aee91a55354655ec33a").decode('hex')
 zmq_private_key = os.getenv('ZEROSAP_ZMQ_PRV_KEY', "1f5d3873472f95e11f4723d858aaf0919ab1fb402cb3097742c606e61dd0d7d8").decode('hex')
 
@@ -167,7 +167,7 @@ def main():
         server = zerorpc.ProxyCurveServer(RpcMethods(conn))
         server.zmq_socket.curve_server = True
         server.zmq_socket.curve_secretkey = zmq_private_key
-        server.connect(zmq_client_endpoint)
+        server.connect(zmq_hub_endpoint)
         log.info("Running...")
         server.run()
 
