@@ -177,5 +177,5 @@ if __name__ == "__main__":
     if args.foreground:
       main()
     else:
-      daemon = Daemonize(app="zerosap", pid=pid, action=main, logger=logger, keep_fds=keep_fds, user="devadm", group="sapsys")
+      daemon = Daemonize(app="zerosap", pid=pid, action=main, logger=logger, keep_fds=keep_fds, user=os.getenv('USER', "root"), group=os.getenv('GROUP', "sapsys"))
       daemon.start()
