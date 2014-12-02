@@ -124,6 +124,9 @@ The zerosap worker reads environmental variables for configuration:
 - Starting the zerosap worker daemon is simple:
 
 ```bash
+	sudo useradd -r zerosap
+	sudo usermod -a -G zerosap prdadm
+	
 	chmod +x /usr/sap/PythonVE/py27-pyrfc/start.sh
 	sudo /usr/sap/PythonVE/py27-pyrfc/start.sh
 	tail -f /tmp/zerosap.log
