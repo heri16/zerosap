@@ -38,6 +38,7 @@ This scenario is great where security and performance is paramount.
 ##### Libsodium
 - [Reference](http://doc.libsodium.org/installation/README.html)
 - [Tarball](https://github.com/jedisct1/libsodium/releases)
+
 	wget https://github.com/jedisct1/libsodium/releases/download/1.0.1/libsodium-1.0.1.tar.gz
 	dig +dnssec +short txt libsodium-1.0.1.tar.gz.download.libsodium.org
 	cat libsodium-1.0.1.tar.gz | openssl dgst -sha256  # If the output is not the same as from the previous command, abort as the downloaded file has been tampered with.
@@ -50,6 +51,7 @@ This scenario is great where security and performance is paramount.
 
 ##### ZeroMQ
 - [Reference](http://zeromq.org/intro:get-the-software)
+
 	wget http://download.zeromq.org/zeromq-4.0.5.tar.gz
 	tar -xvf zeromq-4.0.5.tar.gz
 	cd zeromq-4.0.5
@@ -62,6 +64,7 @@ This scenario is great where security and performance is paramount.
 ##### ZeroRPC for Python
 - ZeroRPC cannot be installed directly via pip / easy_install due to pyzmq that is pinned to an outdated version (version 14.1.1 & above has solved the issue).
 - These instructions will install directly from their GitHub master (for libsodium cryptographic support):
+
 	wget https://github.com/dotcloud/zerorpc-python/archive/master.zip
 	unzip master.zip
 	cd zerorpc-python-master/
@@ -72,11 +75,13 @@ This scenario is great where security and performance is paramount.
 - Installing pyrfc requires the SAP NW RFC SDK that is distributed on the SAP Support Portal.
 - Further instructions [here](http://sap.github.io/PyRFC/install.html).
 - [Downloads](https://github.com/SAP/PyRFC/tree/master/dist)
+
 	wget https://raw.githubusercontent.com/SAP/PyRFC/master/dist/pyrfc-1.9.4-py2.7-linux-x86_64.egg
 	easy_install pyrfc-1.9.4-py2.7-linux-x86_64.egg
 
 #### Daemonize Instalation
 - The easiest to install.
+
 	pip install daemonize
 
 ### Configuration
@@ -102,7 +107,8 @@ The zerosap worker reads environmental variables for configuration:
 	EOF
 
 ### Startup
-Starting the zerosap worker daemon is simple:
+- Starting the zerosap worker daemon is simple:
+
 	chmod +x /usr/sap/PythonVE/py27-pyrfc/start.sh
 	sudo /usr/sap/PythonVE/py27-pyrfc/start.sh
 	tail -f /tmp/zerosap.log
