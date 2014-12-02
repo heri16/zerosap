@@ -12,20 +12,22 @@ More API Documentation coming soon. Meanwhile, look at app.js .
 Worker
 ------
 Zerosap uses the official SAP pyRFC python library, and wraps it as the "Zerosap Worker".  
-As a first-class library fully supported by SAP, pyRFC ensures that Zerosap has great stability and full capabilities (e.g. RFC server scenario).  
-We support two ways of running this worker.
+As a first-class library fully supported by SAP, pyRFC ensures that Zerosap has great stability and full capabilities (e.g. RFC server scenario).
+
+We support two ways of running this worker:
 
 ### A. Embedded into NodeJs
-NodeJs automatically manages the Python worker process via a zerorpc bridge. This scenario is great for getting started.
+- NodeJs automatically manages the Python worker process via a zerorpc bridge.
+- This scenario is great for getting started.
 
 ### B. Remote Daemon
-A "Zerosap Worker" runs as a daemon on a Python-capable host within the internal network/LAN.  
-The host can be the UNIX/Windows server that also hosts SAP Netweaver itself (or another host that have access to the RFC Ports of the target SAP system).
+- A "Zerosap Worker" runs as a daemon on a Python-capable host within the internal network/LAN.  
+- The host can be the UNIX/Windows server that also hosts SAP Netweaver itself (or another host that have access to the RFC Ports of the target SAP system).
 
-The Worker connects back to the NodeJS Dispatcher to receive instructions via a secure zerorpc channel.  
-Multiple Worker instances enable NodeJS to act as a reverse proxy and load balancer, as RFC requests are fanned out from NodeJS to multiple target SAP backend systems.  
-Elliptic-curve cryptography is used.  
-This scenario is great where security and performance is paramount.
+- The Worker connects back to the NodeJS Dispatcher to receive instructions via a secure zerorpc channel.  
+- Multiple Worker instances enable NodeJS to act as a reverse proxy and load balancer, as RFC requests are fanned out from NodeJS to multiple target SAP backend systems.  
+- Elliptic-curve cryptography is used.  
+- This scenario is great where security and performance is paramount.
 
 ### Dependencies
 - libzmq.so >= 4.0.5 (with libsodium support)
