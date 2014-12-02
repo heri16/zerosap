@@ -1,6 +1,6 @@
 {
   "name": "zerosap",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Access SAP-RFC via ZeroRPC-proxy installed on pyRFC virtual environment.",
   "main": "index.js",
   "scripts": {
