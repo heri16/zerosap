@@ -3,6 +3,9 @@
 # http://askubuntu.com/questions/330589/how-to-compile-and-install-dnscrypt
 # https://www.digitalocean.com/community/tutorials/how-to-install-zeromq-from-source-on-a-centos-6-x64-vps
 
+# gevent.threadpool makes pyrfc yield cooperatively to prevent starvation of zerorpc heartbeats
+import gevent
+
 import zerorpc
 from zerorpc.decorators import rep
 import pyrfc
@@ -112,7 +115,12 @@ class RpcMethods(object):
     def call(self, function_name, function_params):
         log.info("Function Name: {}".format(function_name))
         log.info("Function Params: {}".format(function_params))
-        response = self.conn.call(function_name, **function_params)
+
+       	# Use a	gevent.threadpool to prevent heartbeat starvation
+        default_pool = gevent.get_hub().threadpool
+        async_result = default_pool.spawn(self.conn.call, function_name, **function_params)
+        response = async_result.get()
+
         log.info("Function Response: {}".format(response))
         return response
 
@@ -122,7 +130,7 @@ class RpcMethods(object):
     def hello(self, name):
         # return "Hello {}!".format(name)
         requtext = "Hello {}!".format(name).decode('utf-8', 'ignore')
-        result = conn.call('STFC_CONNECTION', REQUTEXT=requtext)
+        result = self.call('STFC_CONNECTION', REQUTEXT=requtext)
         log.info(result['ECHOTEXT'])
         return result['ECHOTEXT']
 
