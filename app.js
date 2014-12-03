@@ -1,6 +1,6 @@
 var zerosap = require('./index');
 
-var sapClient = zerosap.getSapClient('DEV', '10.0.1.230', 4242);
+var sapClient = zerosap.getSapClient('DEV', { port: 4803, callbackUri: 'tcp://10.0.1.230:4903', timeout: 1800 });
 sapClient.invoke('ping', function(err, res) {
   if (err) return console.log(err);
   console.log('RFC Server responded to ping.');
