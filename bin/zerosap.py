@@ -3,12 +3,10 @@
 # http://askubuntu.com/questions/330589/how-to-compile-and-install-dnscrypt
 # https://www.digitalocean.com/community/tutorials/how-to-install-zeromq-from-source-on-a-centos-6-x64-vps
 
-# gevent.threadpool makes pyrfc yield cooperatively to prevent starvation of zerorpc heartbeats
-import gevent
-
-import zerorpc
+import gevent     # gevent.threadpool makes pyrfc yield cooperatively to prevent starvation of zerorpc heartbeats
+import pyrfc      # official SAP pyRFC library (require sapnwrfc sdk)
+import zerorpc    # high performance rpc library (requires libzmq)
 from zerorpc.decorators import rep
-import pyrfc
 from daemonize import Daemonize
 from distutils import dir_util
 import Queue
@@ -17,17 +15,21 @@ import hashlib
 import logging
 import os
 
-# Config-defined Variables
-rfc_conn_params = {
+# Configuration Variables
+RFC_CONN_OPTIONS = {
     'user': os.getenv('ZEROSAP_RFC_USER', 'sap*'),
     'passwd': os.getenv('ZEROSAP_RFC_PASSWD', 'replaceme'),
     'ashost': os.getenv('ZEROSAP_RFC_HOST', '127.0.0.1'),
     'sysnr': os.getenv('ZEROSAP_RFC_SYSNR', '00'),
-    'client': os.getenv('ZEROSAP_RFC_CLIENT', '000')
+    'client': os.getenv('ZEROSAP_RFC_CLIENT', '000'),
 }
-zmq_hub_endpoint = os.getenv('ZEROSAP_ZMQ_HUB', "tcp://localhost:4801")
-zmq_public_key = os.getenv('ZEROSAP_ZMQ_PUB_KEY', "7f188e5244b02bf497b86de417515cf4d4053ce4eb977aee91a55354655ec33a").decode('hex')
-zmq_private_key = os.getenv('ZEROSAP_ZMQ_PRV_KEY', "1f5d3873472f95e11f4723d858aaf0919ab1fb402cb3097742c606e61dd0d7d8").decode('hex')
+
+ZMQ_CONN_OPTIONS = {
+    'secure': (os.getenv('ZEROSAP_ZMQ_SECURE', '1') != '0'),
+    'hub_endpoint': os.getenv('ZEROSAP_ZMQ_HUB', "tcp://localhost:4801"),
+    'public_key': os.getenv('ZEROSAP_ZMQ_PUBLIC_KEY', "7f188e5244b02bf497b86de417515cf4d4053ce4eb977aee91a55354655ec33a").decode('hex'),
+    'secret_key': os.getenv('ZEROSAP_ZMQ_SECRET_KEY', "1f5d3873472f95e11f4723d858aaf0919ab1fb402cb3097742c606e61dd0d7d8").decode('hex')
+}
 
 
 # System Variables
@@ -49,6 +51,7 @@ log = logger
 # Declare Arguments
 parser = argparse.ArgumentParser()
 parser.add_argument('-f', '--foreground', help="keep in foreground. do not run in daemon mode", action='store_true')
+
 
 # A custom implementation of collections.defaultdict
 class Defaultdict(dict):
@@ -83,6 +86,8 @@ class ProxyServer(zerorpc.Server):
         if self._methods_call:
             self._methods = Defaultdict((lambda key: rep(lambda *args, **kargs: self._methods_call(key, *args, **kargs))), self._methods)
 zerorpc.ProxyServer = ProxyServer
+
+# Secure Zerorpc Dynamic-Proxy Server Class
 class ProxyCurveServer(zerorpc.ProxyServer, zerorpc.CurveServer):
     def __init__(self, *args, **kargs):
         super(ProxyCurveServer, self).__init__(*args, **kargs)
@@ -91,8 +96,8 @@ zerorpc.ProxyCurveServer = ProxyCurveServer
 
 # Simple Class to Pool Connections using a Queue
 class ConnectionPool(object):
-    def __init__(self, cls, *args, **kargs):
-        pool = Queue.Queue()
+    def __init__(self, max_size, cls, *args, **kargs):
+        pool = Queue.LifoQueue(max_size)
         self.pool = pool
 
         class PooledConnection(cls):
@@ -100,7 +105,7 @@ class ConnectionPool(object):
                 try:
                     pool.put(self, False)
                 except Queue.Full:
-                    return old_exit_method(self, *args, **kargs)
+                    return cls.__exit__(self, *args, **kargs)
 
         self.builder_class = PooledConnection
         self.builder_args = args
@@ -126,12 +131,13 @@ def digest_file_sha1(file_path):
 
 
 # Class containing exposed RPC Methods
-class RpcMethods(object):
+class RpcToRfcProxy(object):
     #__metaclass__ = RpcMethodsMetaclass
 
-    def __init__(self, conn_params, *args, **kargs):
+    def __init__(self, zmq_conn_options, rfc_conn_options, rfc_pool_size=16):
         #super(RpcMethods, self).__init__(*args, **kargs)
-        self.conn_pool = ConnectionPool(pyrfc.Connection, **conn_params)
+        self.conn_pool = ConnectionPool(rfc_pool_size, pyrfc.Connection, **rfc_conn_options)
+        self.zmq_conn_options = zmq_conn_options
 
     def __call__(self, method, *args, **kargs):
         params = dict((k,v) for d in args if hasattr(d,'items') for (k,v) in d.items(), **kargs)
@@ -143,12 +149,12 @@ class RpcMethods(object):
 
         with self.conn_pool.get() as conn:
        	    # Use a gevent.threadpool to prevent heartbeat starvation
-            default_pool = gevent.get_hub().threadpool
-            async_result = default_pool.spawn(conn.call, function_name, **function_params)
-            response = async_result.get()
+            thread_pool = gevent.get_hub().threadpool
+            async_result = thread_pool.spawn(conn.call, function_name, **function_params)
+            result = async_result.get()
 
-        log.info("Function Response: {}".format(response))
-        return response
+        log.info("Function Result: {}".format(result))
+        return result
 
     def ping(self):
         with self.conn_pool.get() as conn:
@@ -161,20 +167,21 @@ class RpcMethods(object):
         log.info(result['ECHOTEXT'])
         return result['ECHOTEXT']
 
-    def download_file(self, endpoint, endpointKey, command, params, checksum):
+    def download_file(self, endpoint_uri, endpoint_key, command, params, checksum, zmq_secure=True):
         client = zerorpc.CurveClient(timeout=10)
-        client.zmq_socket.curve_secretkey = zmq_private_key
-        client.zmq_socket.curve_publickey = zmq_public_key
+        if zmq_secure:
+            client.zmq_socket.curve_secretkey = self.zmq_conn_options['secret_key']
+            client.zmq_socket.curve_publickey = self.zmq_conn_options['public_key']
+            client.zmq_socket.curve_serverkey = endpoint_key
 
-        log.debug("Connecting to: {}".format(endpoint))
-        client.zmq_socket.curve_serverkey = endpointKey
-        client.connect(endpoint)
+        log.debug("Connecting to: {}".format(endpoint_uri))
+        client.connect(endpoint_uri)
 
         # Make an outbound connection to endpoint and call streamFile method
-        call_args = params  # ['data/import.xml']
+        call_args = params    # ['data/filename.xml']
         if not isinstance(call_args, list):
             raise TypeError("call_args must be an array")
-        reply = client(command, *call_args)  # Blocks execution
+        reply = client(command, *call_args)    # Blocks execution
 
         # Write the reply out to filesystem
         r_fpath = params[0]
@@ -195,16 +202,23 @@ class RpcMethods(object):
 
 
 def main():
-    with pyrfc.Connection(**rfc_conn_params) as conn:
-        result = conn.call('STFC_CONNECTION', REQUTEXT=u'Hello SAP!')
-        log.debug(result)
+    # Test RFC Connection
+    with pyrfc.Connection(**RFC_CONN_OPTIONS) as conn:
+        #log.debug(conn.call('STFC_CONNECTION', REQUTEXT=u'Hello SAP!'))
+        try:
+            conn.ping()
+        except pyrfc.RFCError:
+            log.error('Error: Could not ping RFC connection')
 
-    server = zerorpc.ProxyCurveServer(RpcMethods(rfc_conn_params))
-    server.zmq_socket.curve_server = True
-    server.zmq_socket.curve_secretkey = zmq_private_key
-    server.connect(zmq_hub_endpoint)
-    log.info("Server Running...")
-    server.run()
+    # Setup ZeroRPC Server
+    rpc_methods = RpcToRfcProxy(ZMQ_CONN_OPTIONS, RFC_CONN_OPTIONS, rfc_pool_size=8)
+    rpc_server = zerorpc.ProxyCurveServer(rpc_methods)
+    if ZMQ_CONN_OPTIONS['secure']:
+        rpc_server.zmq_socket.curve_server = True
+        rpc_server.zmq_socket.curve_secretkey = ZMQ_CONN_OPTIONS['secret_key']
+    rpc_server.connect(ZMQ_CONN_OPTIONS['hub_endpoint'])
+    log.info("ZeroRPC Server Running...")
+    rpc_server.run()
 
 
 if __name__ == "__main__":
