@@ -9,9 +9,9 @@ import gevent
 import zerorpc
 from zerorpc.decorators import rep
 import pyrfc
-from Queue import Queue
 from daemonize import Daemonize
 from distutils import dir_util
+import Queue
 import argparse
 import hashlib
 import logging
@@ -92,27 +92,25 @@ zerorpc.ProxyCurveServer = ProxyCurveServer
 # Simple Class to Pool Connections using a Queue
 class ConnectionPool(object):
     def __init__(self, cls, *args, **kargs):
-        self.builder = cls
+        pool = Queue.Queue()
+        self.pool = pool
+
+        class PooledConnection(cls):
+            def __exit__(self, *args, **kargs):
+                try:
+                    pool.put(self, False)
+                except Queue.Full:
+                    return old_exit_method(self, *args, **kargs)
+
+        self.builder_class = PooledConnection
         self.builder_args = args
         self.builder_kargs = kargs
-        self.pool = Queue()
 
     def get(self):
         try:
-            return self.pool.get(false)
-        except Empty:
-            pool = self.pool
-            def exit_decorator(old_exit_method):
-              def __exit__(self, *args, **kargs):
-                try:
-                    pool.put(self, false)
-                except Full:
-                    return old_exit_method(self, *args, **kargs)
-              return __exit__
-
-            conn = self.builder(*self.builder_args, **self.builder_kargs)
-            conn.__exit__ = exit_decorator(conn.__exit__)
-            return conn
+            return self.pool.get(False)
+        except Queue.Empty:
+            return self.builder_class(*self.builder_args, **self.builder_kargs)
 
 
 # Function to calculate SHA1 of a file
