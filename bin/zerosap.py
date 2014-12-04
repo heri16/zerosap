@@ -9,6 +9,7 @@ import gevent
 import zerorpc
 from zerorpc.decorators import rep
 import pyrfc
+from Queue import Queue
 from daemonize import Daemonize
 from distutils import dir_util
 import argparse
@@ -88,6 +89,32 @@ class ProxyCurveServer(zerorpc.ProxyServer, zerorpc.CurveServer):
 zerorpc.ProxyCurveServer = ProxyCurveServer
 
 
+# Simple Class to Pool Connections using a Queue
+class ConnectionPool(object):
+    def __init__(self, cls, *args, **kargs):
+        self.builder = cls
+        self.builder_args = args
+        self.builder_kargs = kargs
+        self.pool = Queue()
+
+    def get(self):
+        try:
+            return self.pool.get(false)
+        except Empty:
+            pool = self.pool
+            def exit_decorator(old_exit_method):
+              def __exit__(self, *args, **kargs):
+                try:
+                    pool.put(self, false)
+                except Full:
+                    return old_exit_method(self, *args, **kargs)
+              return __exit__
+
+            conn = self.builder(*self.builder_args, **self.builder_kargs)
+            conn.__exit__ = exit_decorator(conn.__exit__)
+            return conn
+
+
 # Function to calculate SHA1 of a file
 def digest_file_sha1(file_path):
     BLOCKSIZE = 65536
@@ -104,9 +131,9 @@ def digest_file_sha1(file_path):
 class RpcMethods(object):
     #__metaclass__ = RpcMethodsMetaclass
 
-    def __init__(self, conn, *args, **kargs):
+    def __init__(self, conn_params, *args, **kargs):
         #super(RpcMethods, self).__init__(*args, **kargs)
-        self.conn = conn
+        self.conn_pool = ConnectionPool(pyrfc.Connection, **conn_params)
 
     def __call__(self, method, *args, **kargs):
         params = dict((k,v) for d in args if hasattr(d,'items') for (k,v) in d.items(), **kargs)
@@ -116,16 +143,18 @@ class RpcMethods(object):
         log.info("Function Name: {}".format(function_name))
         log.info("Function Params: {}".format(function_params))
 
-       	# Use a	gevent.threadpool to prevent heartbeat starvation
-        default_pool = gevent.get_hub().threadpool
-        async_result = default_pool.spawn(self.conn.call, function_name, **function_params)
-        response = async_result.get()
+        with self.conn_pool.get() as conn:
+       	    # Use a gevent.threadpool to prevent heartbeat starvation
+            default_pool = gevent.get_hub().threadpool
+            async_result = default_pool.spawn(conn.call, function_name, **function_params)
+            response = async_result.get()
 
         log.info("Function Response: {}".format(response))
         return response
 
     def ping(self):
-        return self.conn.ping()
+        with self.conn_pool.get() as conn:
+            return conn.ping()
 
     def hello(self, name):
         # return "Hello {}!".format(name)
@@ -172,12 +201,12 @@ def main():
         result = conn.call('STFC_CONNECTION', REQUTEXT=u'Hello SAP!')
         log.debug(result)
 
-        server = zerorpc.ProxyCurveServer(RpcMethods(conn))
-        server.zmq_socket.curve_server = True
-        server.zmq_socket.curve_secretkey = zmq_private_key
-        server.connect(zmq_hub_endpoint)
-        log.info("Running...")
-        server.run()
+    server = zerorpc.ProxyCurveServer(RpcMethods(rfc_conn_params))
+    server.zmq_socket.curve_server = True
+    server.zmq_socket.curve_secretkey = zmq_private_key
+    server.connect(zmq_hub_endpoint)
+    log.info("Server Running...")
+    server.run()
 
 
 if __name__ == "__main__":
