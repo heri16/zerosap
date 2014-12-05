@@ -106,7 +106,7 @@ The zerosap worker reads environmental variables for configuration:
 	cd "${DIR}"
 
 	# source /opt/rh/python27/enable
-	scl enable python27 - << \EOF
+	PARAMS=$@ scl enable python27 - << \EOF
 
 	source bin/activate
 
@@ -115,7 +115,7 @@ The zerosap worker reads environmental variables for configuration:
 	export ZEROSAP_ZMQ_HUB=tcp://<ipaddress of nodejs zerosap-dispatcher>:4801
 
 	cd zerosap/
-	ZEROSAP_RFC_CLIENT=100 ZEROSAP_RFC_USER=<username> ZEROSAP_RFC_PASSWD=<password> python bin/zerosap.py "$@"
+	ZEROSAP_RFC_CLIENT=100 ZEROSAP_RFC_USER=<username> ZEROSAP_RFC_PASSWD=<password> python bin/zerosap.py ${PARAMS}
 
 	EOF
 ```

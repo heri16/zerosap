@@ -203,12 +203,19 @@ class RpcToRfcProxy(object):
 
 def main():
     # Test RFC Connection
-    with pyrfc.Connection(**RFC_CONN_OPTIONS) as conn:
-        #log.debug(conn.call('STFC_CONNECTION', REQUTEXT=u'Hello SAP!'))
-        try:
-            conn.ping()
-        except pyrfc.RFCError:
-            log.error('Error: Could not ping RFC connection')
+    try:
+        with pyrfc.Connection(**RFC_CONN_OPTIONS) as conn:
+            #log.debug(conn.call('STFC_CONNECTION', REQUTEXT=u'Hello SAP!'))
+            try:
+                conn.ping()
+            except pyrfc.RFCError as e:
+                log.error('Error: Could not ping the RFC connection')
+                log.error(e)
+                return
+    except pyrfc.LogonError as e:
+        log.error('Error: Could not login the RFC connection')
+        log.error(e)
+        return
 
     # Setup ZeroRPC Server
     rpc_methods = RpcToRfcProxy(ZMQ_CONN_OPTIONS, RFC_CONN_OPTIONS, rfc_pool_size=8)
