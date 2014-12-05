@@ -9,7 +9,7 @@ import zerorpc    # high performance rpc library (requires libzmq)
 from zerorpc.decorators import rep
 from daemonize import Daemonize
 from distutils import dir_util
-import Queue
+from gevent import queue
 import argparse
 import hashlib
 import logging
@@ -97,14 +97,14 @@ zerorpc.ProxyCurveServer = ProxyCurveServer
 # Simple Class to Pool Connections using a Queue
 class ConnectionPool(object):
     def __init__(self, max_size, cls, *args, **kargs):
-        pool = Queue.LifoQueue(max_size)
+        pool = queue.LifoQueue(max_size)
         self.pool = pool
 
         class PooledConnection(cls):
             def __exit__(self, *args, **kargs):
                 try:
                     pool.put(self, False)
-                except Queue.Full:
+                except queue.Full:
                     return cls.__exit__(self, *args, **kargs)
 
         self.builder_class = PooledConnection
@@ -114,7 +114,7 @@ class ConnectionPool(object):
     def get(self):
         try:
             return self.pool.get(False)
-        except Queue.Empty:
+        except queue.Empty:
             return self.builder_class(*self.builder_args, **self.builder_kargs)
 
 
