@@ -34,7 +34,7 @@ ZMQ_CONN_OPTIONS = {
 
 # System Variables
 keep_fds = []
-pid = "/tmp/zerosap.pid"
+pid = os.getenv('PIDFILE', "/var/run/zerosap.pid")
 logging.basicConfig()
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -42,7 +42,7 @@ logger.propagate = False
 ch = logging.StreamHandler()
 ch.setLevel(logging.INFO)
 logger.addHandler(ch)
-fh = logging.FileHandler("/tmp/zerosap.log", "w")
+fh = logging.FileHandler("/var/log/zerosap.log", "w")
 keep_fds.append(fh.stream.fileno())
 fh.setLevel(logging.DEBUG)
 logger.addHandler(fh)
