@@ -14,6 +14,7 @@
   ],
   "author": "Heri",
   "license": "ISC",
+  "repository" : "heri16/zerosap",
   "dependencies": {
     "zerorpc": "^0.9.3",
     "async": "^0.9.0"
